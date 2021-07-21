@@ -23,7 +23,6 @@ export interface ReparteeOptions {
   readonly preference: LayoutTypes.AnchorLayout[];
   readonly maxHeightFunction: MaxHeightFunction;
   readonly maxWidthFunction: MaxWidthFunction;
-  readonly lastLayout: Optional<string>;
   readonly transition: Optional<Transition>;
 }
 
@@ -33,7 +32,6 @@ const defaultOr = <K extends keyof AnchorOverrides>(options: AnchorOverrides, ke
 const simple = (
   anchor: Anchor,
   element: SugarElement,
-  lastLayout: Optional<string>,
   bubble: Bubble,
   layouts: LayoutTypes.AnchorLayout[],
   getBounds: Optional<() => Bounds>,
@@ -53,7 +51,6 @@ const simple = (
     preference: layouts,
     maxHeightFunction,
     maxWidthFunction,
-    lastLayout,
     transition
   };
 

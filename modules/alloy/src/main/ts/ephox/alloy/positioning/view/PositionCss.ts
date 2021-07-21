@@ -1,4 +1,4 @@
-import { Arr, Strings, Obj, Optional, Optionals, Type } from '@ephox/katamari';
+import { Arr, Strings, Optional, Optionals, Type, Singleton, Thunk, Obj } from '@ephox/katamari';
 import { Classes, Css, DomEvent, EventArgs, SugarElement } from '@ephox/sugar';
 
 import * as Placement from '../layout/Placement';
@@ -16,12 +16,6 @@ type Position = 'top' | 'left' | 'bottom' | 'right';
 export interface Transition {
   readonly classes: string[];
   readonly properties: Position[];
-  readonly type: string;
-}
-
-export interface TransitionDetails extends Transition {
-  readonly layout: string;
-  readonly lastLayout: Optional<string>;
 }
 
 const NuPositionCss = (
@@ -48,32 +42,23 @@ const toOptions = (position: PositionCss): Record<string, Optional<string>> => (
 
 const applyPositionCss = (element: SugarElement, position: PositionCss): void => {
   Css.setOptions(element, toOptions(position));
+  Css.reflow(element);
 };
 
-const hasChanges = (element: SugarElement<HTMLElement>, position: PositionCss, transition: TransitionDetails): boolean => {
+const shouldTransition = (element: SugarElement<HTMLElement>, _transition: Transition): boolean => {
+  // Don't apply transitions if there was no previous placement as it's transitioning from offscreen
+  return Placement.getPlacement(element).isSome();
+};
+
+const hasChanges = (position: PositionCss, intermediate: Record<Position, Optional<string>>): boolean => {
   // Round to 3 decimal points
   const round = (value: string) => parseFloat(value).toPrecision(3);
 
-  return Obj.find(position, (value, key) => {
-    if (Arr.contains(transition.properties, key)) {
-      const valueOpt = (value as Optional<string>).map(round);
-      const cssValue = Css.getRaw(element, key).map(round);
-      return !Optionals.equals(valueOpt, cssValue);
-    } else {
-      return false;
-    }
+  return Obj.find(intermediate, (value, key) => {
+    const newValue = position[key as Position].map(round);
+    const val = value.map(round);
+    return !Optionals.equals(newValue, val);
   }).isSome();
-};
-
-const shouldTransition = (element: SugarElement<HTMLElement>, position: PositionCss, transition: TransitionDetails) => {
-  // Don't apply transitions if there was no previous placement as it's transitioning from offscreen
-  if (Placement.getPlacement(element).isNone() || !hasChanges(element, position, transition)) {
-    return false;
-  } else if (transition.type === 'layout') {
-    return !Optionals.is(transition.lastLayout, transition.layout);
-  } else {
-    return true;
-  }
 };
 
 const getTransitionDuration = (element: SugarElement<HTMLElement>): number => {
@@ -85,36 +70,55 @@ const getTransitionDuration = (element: SugarElement<HTMLElement>): number => {
   }, 0);
 };
 
-const applyTransitionCss = (element: SugarElement<HTMLElement>, position: PositionCss, transition: TransitionDetails): void => {
-  if (shouldTransition(element, position, transition)) {
+const setupTransitionListeners = (element: SugarElement<HTMLElement>, transition: Transition) => {
+  const transitionEnd = Singleton.unbindable();
+  const transitionCancel = Singleton.unbindable();
+
+  const transitionDone = (e?: EventArgs<TransitionEvent>) => {
+    const pseudoElement = e?.raw.pseudoElement;
+    // Don't clean up if the pseudo element was the cause of the transitionend
+    if (Type.isNullable(pseudoElement) || Strings.isEmpty(pseudoElement)) {
+      transitionEnd.clear();
+      transitionCancel.clear();
+      transitionStart.unbind();
+      clearTimeout(timer);
+
+      // Only cleanup the class on transitionend not on a cancel
+      // as cancel means something else triggered a new transition
+      const type = e?.raw.type;
+      if (Type.isNullable(type) || type === 'transitionend') {
+        Classes.remove(element, transition.classes);
+      }
+    }
+  };
+
+  // When the transition starts listen for the relevant end event to cleanup
+  const transitionStart = DomEvent.bind(element, 'transitionrun', Thunk.cached(() => {
+    transitionEnd.set(DomEvent.bind(element, 'transitionend', transitionDone));
+    transitionCancel.set(DomEvent.bind(element, 'transitioncancel', transitionDone));
+  }));
+
+  // Ensure the transition is cleaned up (add 10ms to give time for the transitionend to fire)
+  const duration = getTransitionDuration(element);
+  const timer = setTimeout(transitionDone, duration + 10);
+};
+
+const applyTransitionCss = (element: SugarElement<HTMLElement>, position: PositionCss, transition: Transition): void => {
+  if (shouldTransition(element, transition)) {
     // Set the new position first so we can calculate the computed position
     Css.set(element, 'position', position.position);
 
     // Get the computed positions for the current location based on the new styles being applied
     const intermediateCssOptions = Arr.mapToObject(transition.properties, (prop) => position[prop].map(() => Css.get(element, prop)));
 
-    // Bind to the transitionend event to cleanup the transition classes
-    const transitionDone = (e?: EventArgs<TransitionEvent>) => {
-      const pseudoElement = e?.raw.pseudoElement;
-      // Don't clean up if the pseudo element was the cause of the transitionend
-      if (Type.isNullable(pseudoElement) || Strings.isEmpty(pseudoElement)) {
-        transitionEnd.unbind();
-        transitionCancel.unbind();
-        clearTimeout(timer);
-        Classes.remove(element, transition.classes);
-      }
-    };
-    const transitionEnd = DomEvent.bind(element, 'transitionend', transitionDone);
-    const transitionCancel = DomEvent.bind(element, 'transitioncancel', transitionDone);
-
-    // Apply the intermediate styles and class to trigger the transition
-    Css.setOptions(element, intermediateCssOptions);
-    Classes.add(element, transition.classes);
-    Css.reflow(element);
-
-    // Ensure the transition is cleaned up (add 10ms to give time for the transitionend to fire)
-    const duration = getTransitionDuration(element);
-    const timer = setTimeout(transitionDone, duration + 10);
+    // Apply the intermediate styles and transition classes if something has changed
+    if (hasChanges(position, intermediateCssOptions)) {
+      // Apply the intermediate styles and class to trigger the transition
+      Css.setOptions(element, intermediateCssOptions);
+      Classes.add(element, transition.classes);
+      setupTransitionListeners(element, transition);
+      Css.reflow(element);
+    }
   } else {
     Classes.remove(element, transition.classes);
   }

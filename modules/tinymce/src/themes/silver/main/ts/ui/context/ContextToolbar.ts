@@ -79,6 +79,12 @@ const register = (editor: Editor, registryContextToolbars: Record<string, Contex
     return !editor.removed && !(isTouch() && backstage.isContextMenuOpen());
   };
 
+  const isTransitioning = () =>
+    Class.has(contextbar.element, transitionClass);
+
+  const isSameLaunchElement = (elem: Optional<SugarElement<Element>>) =>
+    Optionals.is(Optionals.lift2(elem, lastElement.get(), Compare.eq), true);
+
   const shouldContextToolbarHide = (): boolean => {
     if (!canLaunchToolbar()) {
       return true;
@@ -91,22 +97,13 @@ const register = (editor: Editor, registryContextToolbars: Record<string, Contex
     }
   };
 
-  const isTransitioning = () => Class.has(contextbar.element, transitionClass);
-  const isSameLaunchElement = (elem: Optional<SugarElement<Element>>) => Optionals.is(Optionals.lift2(elem, lastElement.get(), Compare.eq), true);
-
   const close = () => {
     lastElement.clear();
     lastTrigger.clear();
     lastBounds.clear();
     lastContextPosition.clear();
-    reposition.cancel();
     InlineView.hide(contextbar);
   };
-
-  const reposition = Throttler.predicate(() => {
-    lastTrigger.set(TriggerCause.Reposition);
-    InlineView.reposition(contextbar);
-  }, isTransitioning, 16);
 
   const hideOrRepositionIfNecessary = () => {
     if (InlineView.isOpen(contextbar)) {
@@ -115,7 +112,8 @@ const register = (editor: Editor, registryContextToolbars: Record<string, Contex
       if (shouldContextToolbarHide()) {
         Css.set(contextBarEle, 'display', 'none');
       } else {
-        reposition.throttle();
+        lastTrigger.set(TriggerCause.Reposition);
+        InlineView.reposition(contextbar);
       }
     }
   };
@@ -203,22 +201,23 @@ const register = (editor: Editor, registryContextToolbars: Record<string, Contex
     // And everything else that gets toolbars from elsewhere only returns maximum 1 toolbar
     const position = toolbarApi[0].position;
     const anchor = getAnchor(position, elem);
-
-    // Reset placement when moving to different elements
-    if (!isSameLaunchElement(elem)) {
-      Positioning.reset(sink, contextbar);
-    }
-
     lastContextPosition.set(position);
     lastTrigger.set(TriggerCause.NewAnchor);
 
     const contextBarEle = contextbar.element;
     Css.remove(contextBarEle, 'display');
+
+    // Reset placement and transitions when moving to different elements
+    if (!isSameLaunchElement(elem)) {
+      Class.remove(contextBarEle, transitionClass);
+      Positioning.reset(sink, contextbar);
+    }
+
+    // Place the element
     InlineView.showWithinBounds(contextbar, wrapInPopDialog(toolbarSpec), {
       anchor,
       transition: {
-        classes: [ transitionClass ],
-        type: 'layout'
+        classes: [ transitionClass ]
       }
     }, () => Optional.some(getBounds()));
 
@@ -269,7 +268,7 @@ const register = (editor: Editor, registryContextToolbars: Record<string, Contex
     editor.on('focusout', (_e) => {
       Delay.setEditorTimeout(editor, () => {
         if (Focus.search(sink.element).isNone() && Focus.search(contextbar.element).isNone()) {
-          // close();
+          close();
         }
       }, 0);
     });
