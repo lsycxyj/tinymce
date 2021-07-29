@@ -27,17 +27,18 @@ export interface UnbindFormatChanged {
   unbind: () => void;
 }
 
-const setup = (registeredFormatListeners: Cell<RegisteredFormats>, editor: Editor) => {
+const setup = (registeredFormatListeners: Cell<RegisteredFormats>, editor: Editor, vars: Record<string, string>) => {
   const currentFormats = Cell<Record<string, FormatChangeCallback[]>>({ });
 
   registeredFormatListeners.set({});
 
   editor.on('NodeChange', (e) => {
-    updateAndFireChangeCallbacks(editor, e.element, currentFormats, registeredFormatListeners.get());
+    updateAndFireChangeCallbacks(editor, e.element, currentFormats, registeredFormatListeners.get(), vars);
   });
 };
 
-const updateAndFireChangeCallbacks = (editor: Editor, elm: Element, currentFormats: Cell<FormatCallbacks>, formatChangeData: RegisteredFormats) => {
+const updateAndFireChangeCallbacks = (editor: Editor, elm: Element, currentFormats: Cell<FormatCallbacks>, formatChangeData: RegisteredFormats, vars: Record<string, string>) => {
+  console.log('currentFormats.get()', Obj.values(currentFormats.get()));
   const formatsList = Obj.keys(currentFormats.get());
   const newFormats: FormatCallbacks = { };
   const matchedFormats: FormatCallbacks = { };
@@ -48,7 +49,7 @@ const updateAndFireChangeCallbacks = (editor: Editor, elm: Element, currentForma
   // Check for new formats
   Obj.each(formatChangeData, (data: FormatData, format: string) => {
     Tools.each(parents, (node: Node) => {
-      if (editor.formatter.matchNode(node, format, {}, data.similar)) {
+      if (editor.formatter.matchNode(node, format, vars, data.similar)) {
         if (formatsList.indexOf(format) === -1) {
           // Execute callbacks
           Arr.each(data.callbacks, (callback: FormatChangeCallback) => {
@@ -119,9 +120,9 @@ const removeListeners = (registeredFormatListeners: Cell<RegisteredFormats>, for
   registeredFormatListeners.set(formatChangeItems);
 };
 
-const formatChangedInternal = (editor: Editor, registeredFormatListeners: Cell<RegisteredFormats>, formats: string, callback: FormatChangeCallback, similar?: boolean): UnbindFormatChanged => {
+const formatChangedInternal = (editor: Editor, registeredFormatListeners: Cell<RegisteredFormats>, formats: string, callback: FormatChangeCallback, similar?: boolean, vars?: Record<string, string>): UnbindFormatChanged => {
   if (registeredFormatListeners.get() === null) {
-    setup(registeredFormatListeners, editor);
+    setup(registeredFormatListeners, editor, vars);
   }
 
   addListeners(registeredFormatListeners, formats, callback, similar);
