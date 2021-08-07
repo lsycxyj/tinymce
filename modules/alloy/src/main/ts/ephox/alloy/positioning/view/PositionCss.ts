@@ -1,5 +1,5 @@
-import { Arr, Strings, Optional, Optionals, Type, Singleton, Thunk, Obj } from '@ephox/katamari';
-import { Classes, Css, DomEvent, EventArgs, SugarElement } from '@ephox/sugar';
+import { Arr, Strings, Optional, Optionals, Type, Singleton, Obj } from '@ephox/katamari';
+import { Classes, Compare, Css, DomEvent, EventArgs, SugarElement } from '@ephox/sugar';
 
 import * as Placement from '../layout/Placement';
 
@@ -74,33 +74,40 @@ const setupTransitionListeners = (element: SugarElement<HTMLElement>, transition
   const transitionEnd = Singleton.unbindable();
   const transitionCancel = Singleton.unbindable();
 
-  const transitionDone = (e?: EventArgs<TransitionEvent>) => {
-    const pseudoElement = e?.raw.pseudoElement;
-    // Don't clean up if the pseudo element was the cause of the transitionend
-    if (Type.isNullable(pseudoElement) || Strings.isEmpty(pseudoElement)) {
-      transitionEnd.clear();
-      transitionCancel.clear();
-      transitionStart.unbind();
-      clearTimeout(timer);
+  const isSourceTransition = (e: EventArgs<TransitionEvent>) =>
+    Compare.eq(e.target, element) && Arr.contains(transition.properties, e.raw.propertyName);
 
-      // Only cleanup the class on transitionend not on a cancel
-      // as cancel means something else triggered a new transition
-      const type = e?.raw.type;
-      if (Type.isNullable(type) || type === 'transitionend') {
-        Classes.remove(element, transition.classes);
+  const transitionDone = (e?: EventArgs<TransitionEvent>) => {
+    if (Type.isNullable(e) || isSourceTransition(e)) {
+      const pseudoElement = e?.raw.pseudoElement;
+      // Don't clean up if the pseudo element was the cause of the transitionend
+      if (Type.isNullable(pseudoElement) || Strings.isEmpty(pseudoElement)) {
+        transitionEnd.clear();
+        transitionCancel.clear();
+        transitionStart.unbind();
+        clearTimeout(timer);
+
+        // Only cleanup the class on transitionend not on a cancel
+        // as cancel means something else triggered a new transition
+        const type = e?.raw.type;
+        if (Type.isNullable(type) || type === 'transitionend') {
+          Classes.remove(element, transition.classes);
+        }
       }
     }
   };
 
   // When the transition starts listen for the relevant end event to cleanup
-  const transitionStart = DomEvent.bind(element, 'transitionrun', Thunk.cached(() => {
-    transitionEnd.set(DomEvent.bind(element, 'transitionend', transitionDone));
-    transitionCancel.set(DomEvent.bind(element, 'transitioncancel', transitionDone));
-  }));
+  const transitionStart = DomEvent.bind(element, 'transitionrun', (e) => {
+    if (!transitionEnd.isSet() && isSourceTransition(e)) {
+      transitionEnd.set(DomEvent.bind(element, 'transitionend', transitionDone));
+      transitionCancel.set(DomEvent.bind(element, 'transitioncancel', transitionDone));
+    }
+  });
 
-  // Ensure the transition is cleaned up (add 10ms to give time for the transitionend to fire)
+  // Ensure the transition is cleaned up (add 5ms to give time for the transitionend to fire)
   const duration = getTransitionDuration(element);
-  const timer = setTimeout(transitionDone, duration + 10);
+  const timer = setTimeout(transitionDone, duration + 5);
 };
 
 const applyTransitionCss = (element: SugarElement<HTMLElement>, position: PositionCss, transition: Transition): void => {

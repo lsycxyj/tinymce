@@ -88,8 +88,14 @@ const getAnchorSpec = (editor: Editor, mobile: boolean, data: PositionData) => {
   // IMPORTANT: We lazily determine the layout here so that we only do the calculations if absolutely necessary
   const smartInsideLayout = (elem: SugarElement<HTMLElement>): Layout => (anchor, element, bubbles, placee) => {
     const layout = determineInsideLayout(editor, placee, elem, data);
+    // Adjust the anchor box to use the bounds y coords so that we simulate a "docking" type of behaviour
+    const newAnchor = data.bounds().map((bounds) => ({
+      ...anchor,
+      y: bounds.y,
+      height: bounds.height
+    })).getOr(anchor);
     return {
-      ...layout(anchor, element, bubbles, placee),
+      ...layout(newAnchor, element, bubbles, placee),
       // Ensure this is always the preferred option if no outside layouts fit
       alwaysFit: true
     };
@@ -121,8 +127,8 @@ const getAnchorLayout = (editor: Editor, position: InlineContent.ContextPosition
     };
   } else {
     return {
-      // Ensure that insets use half the bubble size since we're hiding the bubble arrow
-      bubble: Bubble.nu(0, bubbleSize, bubbleAlignments, 0.5),
+      // Ensure that insets use 1/4th the bubble size since we're hiding the bubble arrow
+      bubble: Bubble.nu(0, bubbleSize, bubbleAlignments, 1 / 4),
       layouts: getAnchorSpec(editor, isTouch, data),
       overrides: anchorOverrides
     };

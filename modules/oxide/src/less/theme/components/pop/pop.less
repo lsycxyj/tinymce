@@ -24,14 +24,15 @@
   .tox-pop--resizing {
     transition: width .1s ease;
 
-    .tox-toolbar {
+    .tox-toolbar,
+    .tox-toolbar__group {
       // When the toolbar is resizing, it won't fit into its container. Therefore, turn off wrapping
       flex-wrap: nowrap;
     }
   }
 
   .tox-pop--transition {
-    transition: @pop-transition-time ease-in-out;
+    transition: @pop-transition-time ease;
     transition-property: left, right, top, bottom;
 
     // Make the arrow appear towards the end of the transition
