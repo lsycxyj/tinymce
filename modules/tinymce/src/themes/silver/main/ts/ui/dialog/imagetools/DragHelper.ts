@@ -5,6 +5,7 @@
  * For commercial licenses see https://www.tiny.cloud/
  */
 
+import { SugarElement, SugarShadowDom } from '@ephox/sugar';
 import DomQuery from 'tinymce/core/api/dom/DomQuery';
 
 /**
@@ -27,6 +28,7 @@ import DomQuery from 'tinymce/core/api/dom/DomQuery';
 
 interface DragHelperSettings {
   document?: Document;
+  rootNode?: Document | ShadowRoot;
   handle?: string;
   start: (e: MouseEvent | TouchEvent) => void;
   drag: (e: (MouseEvent | TouchEvent) & { deltaX: number; deltaY: number }) => void;
@@ -67,10 +69,11 @@ const updateWithTouchData = (e) => {
 export default (id: string, settings: DragHelperSettings) => {
   let $eventOverlay;
   const doc = settings.document || document;
+  const rootNode = settings.rootNode || doc;
   let downButton;
   let startX, startY;
 
-  const handleElement = doc.getElementById(settings.handle || id);
+  const handleElement = rootNode.getElementById(settings.handle || id);
 
   const start = (e) => {
     const docSize = getDocumentSize(doc);
@@ -92,6 +95,8 @@ export default (id: string, settings: DragHelperSettings) => {
       cursor = (handleElm as any).runtimeStyle.cursor;
     }
 
+    const contentContainer = SugarShadowDom.getContentContainer(SugarElement.fromDom(rootNode)).dom;
+
     $eventOverlay = DomQuery('<div></div>').css({
       position: 'absolute',
       top: 0, left: 0,
@@ -100,7 +105,7 @@ export default (id: string, settings: DragHelperSettings) => {
       zIndex: 0x7FFFFFFF,
       opacity: 0.0001,
       cursor
-    }).appendTo(doc.body);
+    }).appendTo(contentContainer);
 
     DomQuery(doc).on('mousemove touchmove', drag).on('mouseup touchend', stop);
 

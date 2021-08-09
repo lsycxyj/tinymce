@@ -5,6 +5,7 @@
  * For commercial licenses see https://www.tiny.cloud/
  */
 
+import { SugarElement, SugarShadowDom } from '@ephox/sugar';
 import Tools from '../util/Tools';
 import EventUtils, { EventUtilsCallback } from './EventUtils';
 import Sizzle from './Sizzle';
@@ -328,7 +329,7 @@ const grep = (array, callback) => {
   return out;
 };
 
-const getElementDocument = (element) => {
+const getElementRootNode = (element) => {
   if (!element) {
     return doc;
   }
@@ -337,7 +338,12 @@ const getElementDocument = (element) => {
     return element;
   }
 
-  return element.ownerDocument;
+  return SugarShadowDom.getRootNode(SugarElement.fromDom(element)).dom;
+};
+
+const getElementDocument = (element) => {
+  const rootNode = getElementRootNode(element);
+  return rootNode.nodeType === 9 ? rootNode : rootNode.ownerDocument;
 };
 
 DomQueryConstructor.fn = (DomQueryConstructor as any).prototype = {
@@ -418,7 +424,7 @@ DomQueryConstructor.fn = (DomQueryConstructor as any).prototype = {
             node = node.nextSibling;
           }
         } else {
-          node = getElementDocument(context).getElementById(match[2]);
+          node = getElementRootNode(context).getElementById(match[2]);
 
           if (!node) {
             return self;

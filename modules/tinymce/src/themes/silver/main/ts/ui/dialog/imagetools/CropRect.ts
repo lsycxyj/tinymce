@@ -5,6 +5,7 @@
  * For commercial licenses see https://www.tiny.cloud/
  */
 
+import { SugarElement, SugarShadowDom } from '@ephox/sugar';
 import DomQuery from 'tinymce/core/api/dom/DomQuery';
 import Rect, { GeomRect } from 'tinymce/core/api/geom/Rect';
 import Observable from 'tinymce/core/api/util/Observable';
@@ -89,6 +90,7 @@ const create = (currentRect, viewPortRect, clampRect, containerElm, action): Cro
       let startRect;
       return DragHelper(id, {
         document: containerElm.ownerDocument,
+        rootNode: SugarShadowDom.getRootNode(SugarElement.fromDom(containerElm)).dom,
         handle: id + '-' + handle.name,
 
         start: () => {
