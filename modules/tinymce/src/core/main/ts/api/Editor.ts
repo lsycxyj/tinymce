@@ -76,6 +76,8 @@ export interface EditorConstructor {
   new (id: string, settings: RawEditorSettings, editorManager: EditorManager): Editor;
 }
 
+export type FilterFunction = (v: any) => any;
+
 // Shorten these names
 const DOM = DOMUtils.DOM;
 const extend = Tools.extend, each = Tools.each;
@@ -266,6 +268,7 @@ class Editor implements EditorObservable {
   public _pendingNativeEvents: string[];
   public _selectionOverrides: SelectionOverrides;
   public _skinLoaded: boolean;
+  public _filters: Record<string, FilterFunction[]>;
 
   // EditorObservable patches
   public bindPendingEventDelegates: EditorObservable['bindPendingEventDelegates'];
@@ -353,6 +356,36 @@ class Editor implements EditorObservable {
       context: this.inline ? this.getBody() : this.getDoc(),
       element: this.getBody()
     }));
+  }
+
+  public addFilter(name: string, func: FilterFunction) {
+    if (!Tools.isArray(this._filters[name])) {
+      this._filters[name] = [];
+    }
+    this._filters[name].push(func);
+  }
+
+  public removeFilter(name: string, func: FilterFunction) {
+    const filters = this._filters[name];
+    if (Tools.isArray(filters[name])) {
+      for (let i = 0; i < filters.length; i++) {
+        if (filters[i] === func) {
+          filters.splice(i, 1);
+          break;
+        }
+      }
+    }
+  }
+
+  public applyFilter(name: string, value: any) {
+    let ret = value;
+    const filters = this._filters[name];
+    if (Tools.isArray(filters[name])) {
+      filters.forEach((f) => {
+        ret = f(ret);
+      });
+    }
+    return ret;
   }
 
   /**

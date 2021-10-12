@@ -460,7 +460,7 @@ class EditorCommands {
       },
 
       'mceInsertContent': (command, ui, value) => {
-        InsertContent.insertAtCaret(editor, value);
+        InsertContent.insertAtCaret(editor, editor.applyFilter('mceInsertContent', value));
       },
 
       'mceInsertRawHTML': (command, ui, value) => {
